@@ -24,6 +24,9 @@ using JetBrains.Annotations;
 
 using Microsoft.Extensions.Options;
 
+using System;
+using System.Text;
+
 namespace FluentMigrator.Runner.Generators.SQLite
 {
     // ReSharper disable once InconsistentNaming
@@ -59,9 +62,40 @@ namespace FluentMigrator.Runner.Generators.SQLite
             return CompatibilityMode.HandleCompatibilty("SQLite does not support renaming of columns");
         }
 
+        [Obsolete("Use Generate(DeleteSQLiteColumnExpression expression) instead", true)]
         public override string Generate(DeleteColumnExpression expression)
         {
             return CompatibilityMode.HandleCompatibilty("SQLite does not support deleting of columns");
+        }
+
+        public string Generate(DeleteSQLiteColumnExpression expression)
+        {
+            foreach (var columnName in expression.GenericExpression.ColumnNames)
+            {
+                expression.AvailableColumnNames.Remove(columnName);
+            }
+
+            var commaSeperatedColumnNames = string.Join(",", expression.AvailableColumnNames);
+
+            var stringBuilder = new StringBuilder();
+            stringBuilder.AppendFormat("CREATE TABLE _delete_column_tmp AS SELECT {0} FROM {1};{2}",
+                commaSeperatedColumnNames,
+                expression.GenericExpression.TableName,
+                AsBatchSQL());
+
+            stringBuilder.AppendFormat("DROP TABLE {0};{1}",
+                expression.GenericExpression.TableName,
+                AsBatchSQL());
+
+            stringBuilder.AppendFormat("ALTER TABLE _delete_column_tmp RENAME TO {0};",
+                expression.GenericExpression.TableName);
+
+            return stringBuilder.ToString();
+        }
+        
+        private string AsBatchSQL()
+        {
+            return "\nGO\n";
         }
 
         public override string Generate(AlterDefaultConstraintExpression expression)

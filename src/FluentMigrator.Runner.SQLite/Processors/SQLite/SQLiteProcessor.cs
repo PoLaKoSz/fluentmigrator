@@ -144,6 +144,34 @@ namespace FluentMigrator.Runner.Processors.SQLite
             expression.Operation?.Invoke(Connection, null);
         }
 
+        public override void Process(DeleteColumnExpression expression)
+        {
+            var deleteSQLiteColumnExpression = new DeleteSQLiteColumnExpression(expression)
+            {
+                AvailableColumnNames = GetColumnNames(expression.TableName)
+            };
+
+            var generator = _serviceProvider.GetService<SQLiteGenerator>();
+            var sql = generator.Generate(deleteSQLiteColumnExpression);
+
+            Process(sql);
+        }
+
+        private List<string> GetColumnNames(string tableName)
+        {
+            var columnNames = new List<string>();
+
+            var dataSet = Read("PRAGMA table_info([{0}])", tableName);
+
+            var table = dataSet.Tables[0];
+            foreach (DataRow row in table.Rows)
+            {
+                columnNames.Add((string)row.ItemArray[1]);
+            }
+
+            return columnNames;
+        }
+
         protected override void Process(string sql)
         {
             Logger.LogSql(sql);
@@ -156,14 +184,11 @@ namespace FluentMigrator.Runner.Processors.SQLite
             if (ContainsGo(sql))
             {
                 ExecuteBatchNonQuery(sql);
-
             }
             else
             {
                 ExecuteNonQuery(sql);
             }
-
-
         }
 
         private bool ContainsGo(string sql)
